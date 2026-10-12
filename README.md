@@ -2,6 +2,8 @@
 
 Android English-speaking coach with typed English practice.
 
+Version 1.1 adds a complete offline practice session: typed or spoken input, Android speech recognition, rule-based corrections, spoken feedback, selectable Conversation/Teacher/Interview prompts, an optional camera preview, caption controls, and an end-of-session summary. Camera and microphone permissions are requested only when those controls are used. Availability of speech recognition, text-to-speech voices, and camera capture depends on the Android device.
+
 ## Typed practice
 
 Enter a sentence in **Typed English practice** and tap **Check sentence** (or the keyboard Done action). Feedback is labeled **Rule-based feedback (offline)** and contains the original sentence, a suggested correction, and short explanations. Editing the input clears the previous feedback. Empty input and input over 500 characters show validation messages.
@@ -26,7 +28,7 @@ gradle --no-daemon testDebugUnitTest lintDebug assembleDebug
 
 The APK is written to `android/app/build/outputs/apk/debug/app-debug.apk` (from the repository root). GitHub Actions runs the same checks on pushes to main and pull requests, and publishes the `ai-english-coach-apk` artifact.
 
-Manual checks: submit different supported examples, an unsupported sentence, whitespace, and an input over 500 characters; edit and resubmit; rotate the device; check scrolling with the keyboard open; toggle Mic, Camera, and CC before and after submitting.
+Manual checks: submit different supported examples, an unsupported sentence, whitespace, and an input over 500 characters; edit and resubmit; rotate the device; check scrolling with the keyboard open; grant and deny microphone/camera permissions; complete speech input; play feedback; switch every mode; toggle Camera and CC; end and restart a session.
 
 ## Future AI integration
 

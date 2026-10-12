@@ -18,19 +18,40 @@ class CallViewModelTest {
             assertNotNull(vm.state.value.practiceError)
             vm.updatePracticeInput("They is ready.")
             vm.submitPractice()
-            vm.toggleMute(); vm.toggleCamera(); vm.toggleCaptions()
+            vm.toggleCamera(); vm.toggleCaptions()
             advanceUntilIdle()
             assertEquals("They are ready.", vm.state.value.feedback?.corrected)
-            assertTrue(vm.state.value.muted)
-            assertFalse(vm.state.value.cameraOn)
+            assertTrue(vm.state.value.cameraOn)
             assertFalse(vm.state.value.captionsOn)
             assertFalse(vm.state.value.checking)
             vm.updatePracticeInput("She are ready.")
             assertNull(vm.state.value.feedback)
             vm.submitPractice(); advanceUntilIdle()
             assertEquals("She is ready.", vm.state.value.feedback?.corrected)
+            assertEquals(2, vm.state.value.checkedCount)
             vm.updatePracticeInput("a".repeat(501)); vm.submitPractice()
             assertNotNull(vm.state.value.practiceError)
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test fun speechModesAndSessionLifecycle() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val vm = CallViewModel()
+            vm.selectMode(LearningMode.INTERVIEW)
+            vm.acceptSpeech("They is ready.")
+            advanceUntilIdle()
+            assertEquals(LearningMode.INTERVIEW, vm.state.value.mode)
+            assertEquals("They is ready.", vm.state.value.practiceInput)
+            assertEquals("They are ready.", vm.state.value.feedback?.corrected)
+            vm.endSession()
+            assertTrue(vm.state.value.sessionEnded)
+            vm.submitPractice()
+            assertEquals(1, vm.state.value.checkedCount)
+            vm.startNewSession()
+            assertFalse(vm.state.value.sessionEnded)
+            assertEquals(0, vm.state.value.checkedCount)
+            assertEquals(LearningMode.INTERVIEW, vm.state.value.mode)
         } finally { Dispatchers.resetMain() }
     }
 
