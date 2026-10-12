@@ -2,7 +2,27 @@
 
 Android English-speaking coach with typed English practice.
 
-Version 1.1 adds a complete offline practice session: typed or spoken input, Android speech recognition, rule-based corrections, spoken feedback, selectable Conversation/Teacher/Interview prompts, an optional camera preview, caption controls, and an end-of-session summary. Camera and microphone permissions are requested only when those controls are used. Availability of speech recognition, text-to-speech voices, and camera capture depends on the Android device.
+Version 2.0 adds a live AI voice call alongside the offline practice session. The live call streams microphone audio over WebRTC, plays the coach's speech, shows learner and coach transcripts, supports mute/end controls, and instructs the coach to correct useful English mistakes naturally. Offline typed/speech practice, rule feedback, spoken playback, selectable modes, camera preview, captions, and session summaries remain available.
+
+## Live AI call setup
+
+The Android app requires a small HTTPS backend because the standard OpenAI API key must stay on a trusted server. The backend is in `backend/` and follows the Realtime API unified WebRTC flow.
+
+1. Deploy `backend/` to a Node 20 host or container platform.
+2. Set `OPENAI_API_KEY` only in the host's secret environment settings.
+3. Set `ALLOWED_ORIGIN=https://appassets.androidplatform.net`.
+4. Check `https://YOUR_HOST/health`; it should return `{"status":"ok"}`.
+5. In the app, paste the HTTPS host address into **Secure backend URL** and select **Start live AI call**.
+
+Local backend tests:
+
+```bash
+cd backend
+npm ci
+npm test
+```
+
+The backend validates SDP input, rate limits session creation, restricts browser origin, and never returns the standard API key. For a public release, add your own user authentication and replace the fallback safety identifier with a stable, privacy-preserving hashed user ID.
 
 ## Typed practice
 
@@ -28,7 +48,7 @@ gradle --no-daemon testDebugUnitTest lintDebug assembleDebug
 
 The APK is written to `android/app/build/outputs/apk/debug/app-debug.apk` (from the repository root). GitHub Actions runs the same checks on pushes to main and pull requests, and publishes the `ai-english-coach-apk` artifact.
 
-Manual checks: submit different supported examples, an unsupported sentence, whitespace, and an input over 500 characters; edit and resubmit; rotate the device; check scrolling with the keyboard open; grant and deny microphone/camera permissions; complete speech input; play feedback; switch every mode; toggle Camera and CC; end and restart a session.
+Manual checks: deploy the backend and verify `/health`; start a live call, speak multiple turns, interrupt naturally, mute/unmute, confirm both transcripts, end and restart; then test supported/unsupported offline sentences, whitespace, 500-character validation, speech input, feedback playback, mode switching, camera permission/capture, captions, rotation, and session restart.
 
 ## Future AI integration
 

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Live English Coach</title>
+  <style>
+    :root{font-family:system-ui,sans-serif;color:#241f2b;background:#faf8ff}*{box-sizing:border-box}body{margin:0;min-height:100vh;padding:24px;display:flex;justify-content:center}.app{width:min(680px,100%)}header{display:flex;justify-content:space-between;align-items:center}.pill{padding:8px 12px;border-radius:999px;background:#eee8f4}.stage{margin:20px 0;padding:28px;border-radius:28px;background:#eaddff;text-align:center}.avatar{width:120px;height:120px;margin:auto;border-radius:50%;display:grid;place-items:center;background:#6750a4;color:white;font-size:42px;font-weight:700}.pulse{animation:pulse 1.4s infinite}@keyframes pulse{50%{transform:scale(1.05)}}button{border:0;border-radius:999px;padding:13px 18px;font-weight:700;font-size:16px}button.primary{background:#6750a4;color:white}button.danger{background:#ba1a1a;color:white}button.secondary{background:#e8def8;color:#1d192b}button:disabled{opacity:.45}.controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}.log{margin-top:20px;display:grid;gap:10px}.turn{padding:14px 16px;border-radius:18px;background:white;box-shadow:0 1px 4px #0002}.turn b{display:block;margin-bottom:5px}.error{color:#ba1a1a}.hint{color:#625b71;font-size:14px}audio{display:none}
+  </style>
+</head>
+<body><main class="app">
+  <header><div><b>Friendly Teacher</b><div class="hint">Realtime English conversation</div></div><span class="pill" id="status">Ready</span></header>
+  <section class="stage"><div class="avatar" id="avatar">AI</div><h2 id="headline">Start your live practice call</h2><p id="hint">Speak naturally. Your coach will answer and correct useful mistakes.</p></section>
+  <div class="controls"><button class="primary" id="start">Start call</button><button class="secondary" id="mute" disabled>Mute</button><button class="danger" id="end" disabled>End call</button></div>
+  <p class="error" id="error" role="alert"></p><section class="log" id="log" aria-live="polite"></section><audio id="remote" autoplay></audio>
+</main><script>
+const $=id=>document.getElementById(id); const backend=new URLSearchParams(location.search).get('backend');
+let pc,dc,stream,closing=false,assistantText='';
+function status(text,active=false){$('status').textContent=text;$('avatar').classList.toggle('pulse',active)}
+function turn(who,text){if(!text)return;const el=document.createElement('article');el.className='turn';const b=document.createElement('b');b.textContent=who;const p=document.createElement('div');p.textContent=text;el.append(b,p);$('log').prepend(el)}
+function fail(message){$('error').textContent=message;status('Error');cleanup()}
+async function start(){
+  $('error').textContent='';$('start').disabled=true;status('Connecting…',true);
+  try{
+    if(!backend||!backend.startsWith('https://'))throw new Error('Set a valid HTTPS backend URL in the app first.');
+    stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true},video:false});
+    pc=new RTCPeerConnection();pc.ontrack=e=>{$('remote').srcObject=e.streams[0]};stream.getTracks().forEach(t=>pc.addTrack(t,stream));
+    dc=pc.createDataChannel('oai-events');dc.onmessage=handleEvent;dc.onopen=()=>{status('Listening',true);$('headline').textContent='Your coach is listening';$('mute').disabled=false;$('end').disabled=false};
+    pc.onconnectionstatechange=()=>{if(['failed','disconnected'].includes(pc.connectionState)&&!closing)fail('The live connection was lost. Please try again.')};
+    const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+    const response=await fetch(backend.replace(/\/$/,'')+'/session',{method:'POST',headers:{'Content-Type':'application/sdp'},body:offer.sdp});
+    const body=await response.text();if(!response.ok)throw new Error(body||`Server returned ${response.status}`);
+    let answer=body;try{const parsed=JSON.parse(body);answer=parsed.transport?.sdp||parsed.sdp||body}catch{}
+    await pc.setRemoteDescription({type:'answer',sdp:answer});
+  }catch(e){fail(e.message||'Could not start the live call.')}
+}
+function handleEvent(message){
+  let event;try{event=JSON.parse(message.data)}catch{return}if(event.type==='response.event'&&event.event)event=event.event;
+  if(event.type==='input_audio_buffer.speech_started')status('Listening',true);
+  if(event.type==='input_audio_buffer.speech_stopped')status('Thinking…',true);
+  if(event.type==='conversation.item.input_audio_transcription.completed')turn('You',event.transcript);
+  if(event.type==='response.output_audio_transcript.delta'){assistantText+=event.delta||'';status('Coach speaking',true)}
+  if(event.type==='response.output_audio_transcript.done'){turn('Coach',event.transcript||assistantText);assistantText=''}
+  if(event.type==='response.done')status('Listening',true);
+  if(event.type==='error')fail(event.error?.message||'The live service reported an error.');
+  if(event.type==='session.closed'){cleanup();status('Call ended');$('headline').textContent='Practice complete'}
+}
+function cleanup(){stream?.getTracks().forEach(t=>t.stop());dc?.close();pc?.close();stream=dc=pc=null;$('mute').disabled=true;$('end').disabled=true;$('start').disabled=false;$('start').textContent='Start another call'}
+$('start').onclick=start;$('mute').onclick=()=>{const track=stream?.getAudioTracks()[0];if(track){track.enabled=!track.enabled;$('mute').textContent=track.enabled?'Mute':'Unmute';status(track.enabled?'Listening':'Muted',track.enabled)}};
+$('end').onclick=()=>{closing=true;status('Ending…');if(dc?.readyState==='open')dc.send(JSON.stringify({type:'session.close'}));setTimeout(()=>{cleanup();status('Call ended')},1500)};
+window.addEventListener('beforeunload',cleanup);
+  </script></body>
+</html>
