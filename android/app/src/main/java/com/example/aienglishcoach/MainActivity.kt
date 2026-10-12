@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -109,6 +110,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable private fun CoachRoute(vm: CallViewModel = viewModel()) {
     val context = LocalContext.current
+    val preferences = remember { context.getSharedPreferences("coach_settings", Activity.MODE_PRIVATE) }
+    var backendUrl by rememberSaveable { mutableStateOf(preferences.getString("backend_url", "") ?: "") }
     var cameraImage by remember { mutableStateOf<Bitmap?>(null) }
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
     var ttsReady by remember { mutableStateOf(false) }
@@ -140,6 +143,13 @@ class MainActivity : ComponentActivity() {
     }
     CallScreen(
         vm, cameraImage,
+        backendUrl = backendUrl,
+        onBackendUrlChange = { backendUrl = it; preferences.edit().putString("backend_url", it.trim()).apply() },
+        onStartLiveCall = {
+            val url = backendUrl.trim().trimEnd('/')
+            if (!url.startsWith("https://")) vm.showError("Enter the HTTPS address of your deployed Realtime backend.")
+            else context.startActivity(Intent(context, LiveCallActivity::class.java).putExtra(LiveCallActivity.EXTRA_BACKEND_URL, url))
+        },
         onCamera = {
             if (vm.state.value.cameraOn) { cameraImage = null; vm.toggleCamera() }
             else if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) cameraLauncher.launch(null)
@@ -172,7 +182,16 @@ private fun launchSpeechRecognizer(launch: (Intent) -> Unit, onError: (String) -
 private fun GrammarFeedback.spokenSummary(): String = if (explanations.isEmpty())
     "No supported rule matched. Your sentence is $corrected" else "Suggested correction: $corrected. ${explanations.joinToString(" ")}"
 
-@Composable fun CallScreen(vm: CallViewModel, cameraImage: Bitmap?, onCamera: () -> Unit, onSpeak: () -> Unit, onPlayFeedback: () -> Unit) {
+@Composable fun CallScreen(
+    vm: CallViewModel,
+    cameraImage: Bitmap?,
+    backendUrl: String,
+    onBackendUrlChange: (String) -> Unit,
+    onStartLiveCall: () -> Unit,
+    onCamera: () -> Unit,
+    onSpeak: () -> Unit,
+    onPlayFeedback: () -> Unit
+) {
     val s by vm.state.collectAsState()
     if (s.sessionEnded) {
         Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -184,13 +203,33 @@ private fun GrammarFeedback.spokenSummary(): String = if (explanations.isEmpty()
         }; return
     }
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp)) {
-        Header(s.mode, vm::selectMode); Spacer(Modifier.height(16.dp)); TutorPanel(s, cameraImage); Spacer(Modifier.height(14.dp))
+        Header(s.mode, vm::selectMode); Spacer(Modifier.height(16.dp))
+        LiveCallCard(backendUrl, onBackendUrlChange, onStartLiveCall); Spacer(Modifier.height(14.dp))
+        TutorPanel(s, cameraImage); Spacer(Modifier.height(14.dp))
         PracticeCard(s, vm, onSpeak, onPlayFeedback); Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilledTonalButton(onClick = onSpeak, enabled = !s.checking) { Text("Speak") }
             FilledTonalButton(onClick = onCamera) { Text(if (s.cameraOn) "Camera off" else "Camera") }
             FilledTonalButton(onClick = vm::toggleCaptions) { Text(if (s.captionsOn) "CC on" else "CC off") }
             Button(onClick = vm::endSession, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("End") }
+        }
+    }
+}
+
+@Composable private fun LiveCallCard(backendUrl: String, onUrlChange: (String) -> Unit, onStart: () -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Live AI call", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Talk continuously with your coach and receive spoken corrections.", style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(
+                value = backendUrl,
+                onValueChange = onUrlChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Secure backend URL") },
+                placeholder = { Text("https://your-server.example.com") }
+            )
+            Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("Start live AI call") }
         }
     }
 }
