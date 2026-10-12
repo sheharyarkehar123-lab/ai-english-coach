@@ -23,8 +23,11 @@ class RuleBasedGrammarCorrectionService : GrammarCorrectionService {
         fun apply(pattern: String, why: String, replacement: (MatchResult) -> String) {
             val regex = Regex(pattern, RegexOption.IGNORE_CASE)
             if (regex.containsMatchIn(corrected)) {
-                corrected = regex.replace(corrected, replacement)
-                explanations += why
+                val updated = regex.replace(corrected, replacement)
+                if (updated != corrected) {
+                    corrected = updated
+                    explanations += why
+                }
             }
         }
         apply(
